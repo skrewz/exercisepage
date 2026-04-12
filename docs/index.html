@@ -1,0 +1,742 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Home Exercise App</title>
+    <meta name="theme-color" content="#007bff">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="appicon.png">
+    <script src="https://cdn.jsdelivr.net/npm/js-yaml@4.1.0/dist/js-yaml.min.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+        .section {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        textarea {
+            width: 100%;
+            min-height: 150px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 14px;
+            resize: vertical;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-right: 10px;
+            margin-top: 10px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        button.danger {
+            background: #dc3545;
+        }
+        button.danger:hover {
+            background: #c82333;
+        }
+        .programme-list {
+            list-style: none;
+        }
+        .programme-item {
+            padding: 10px;
+            border: 1px solid #eee;
+            margin-bottom: 10px;
+            border-radius: 4px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .exercise-item {
+            padding: 15px;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+            margin-bottom: 15px;
+            background: #fafafa;
+        }
+        .exercise-name {
+            font-weight: bold;
+            font-size: 18px;
+            color: #333;
+            margin-bottom: 10px;
+        }
+        .exercise-details {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+        .detail {
+            background: #e9ecef;
+            padding: 8px 12px;
+            border-radius: 4px;
+        }
+        .detail-label {
+            font-size: 12px;
+            color: #666;
+        }
+        .detail-value {
+            font-size: 16px;
+            font-weight: bold;
+            color: #333;
+        }
+        .timer-display {
+            font-size: 48px;
+            font-weight: bold;
+            text-align: center;
+            padding: 30px;
+            background: #e9ecef;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        .timer-display.warning {
+            background: #fff3cd;
+            color: #856404;
+        }
+        .timer-display.expired {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        .current-exercise {
+            text-align: center;
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+        .set-counter {
+            text-align: center;
+            font-size: 16px;
+            color: #666;
+            margin-bottom: 20px;
+        }
+        .hidden {
+            display: none;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input[type="text"] {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Home Exercise App</h1>
+
+    <div class="section">
+        <h2 id="programmeFormTitle">Create New Programme</h2>
+        <input type="hidden" id="editProgrammeId" value="">
+        <label for="programmeName">Programme Name:</label>
+        <input type="text" id="programmeName" placeholder="e.g., Morning Workout">
+        <label for="yamlInput">YAML Snippet:</label>
+        <textarea id="yamlInput" placeholder='- name: Push-ups
+  reps: 20
+  sets: 3
+  restTime: 60' oninput="validateYamlPreview()"></textarea>
+        <p style="margin-top: 10px; font-size: 14px; color: #666;">
+            Format: YAML list with name, reps, sets, restTime fields
+        </p>
+        <div id="yamlValidation" style="margin: 10px 0; padding: 10px; border-radius: 4px; display: none;"></div>
+        <button onclick="saveProgramme()">Save Programme</button>
+        <button onclick="cancelEdit()" id="cancelEditBtn" style="display:none;">Cancel Edit</button>
+    </div>
+
+    <div class="section">
+        <h2>Saved Programmes</h2>
+        <ul class="programme-list" id="programmeList"></ul>
+    </div>
+
+    <div class="section" id="dataSection">
+        <h2>Data Management</h2>
+        <button onclick="downloadBackup()">Download Backup</button>
+        <button onclick="document.getElementById('importFile').click()">Import Backup</button>
+        <input type="file" id="importFile" accept=".yaml,.yml" style="display:none" onchange="importBackup(event)">
+        <button class="danger" onclick="clearHistory()">Clear History</button>
+    </div>
+
+    <div class="section hidden" id="workoutSection">
+        <h2 id="currentProgrammeName"></h2>
+        <div class="current-exercise" id="currentExercise"></div>
+        <div class="set-counter" id="setCounter"></div>
+        <div id="restTimerSection" class="hidden">
+            <div style="text-align:center; font-size:16px; color:#666; margin-bottom:5px;">Rest Period</div>
+            <div class="timer-display" id="timerDisplay">00:00</div>
+        </div>
+        <div id="readyMessage" class="hidden" style="text-align:center; font-size:24px; color:#28a745; padding:20px;"></div>
+        <div style="text-align:center; margin:10px 0; font-size:18px;">
+            Set Duration: <span id="setDurationDisplay">0s</span>
+        </div>
+        <button id="startBtn" onclick="startWorkout()">Start</button>
+        <button id="startSetBtn" onclick="startSet()" disabled>Start Set</button>
+        <button id="finishSetBtn" onclick="finishSet()" disabled>Finish Set</button>
+        <button class="danger" onclick="stopWorkout()">Stop</button>
+        <div id="currentWorkoutTable" style="margin-top:20px;">
+            <h3>Completed Sets</h3>
+            <table style="width:100%; border-collapse:collapse;">
+                <thead>
+                    <tr style="background:#e9ecef;">
+                        <th style="padding:8px; border:1px solid #ddd;">Exercise</th>
+                        <th style="padding:8px; border:1px solid #ddd;">Set</th>
+                        <th style="padding:8px; border:1px solid #ddd;">Reps</th>
+                        <th style="padding:8px; border:1px solid #ddd;">Duration</th>
+                    </tr>
+                </thead>
+                <tbody id="currentWorkoutBody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="section hidden" id="historySection">
+        <h2>Workout History</h2>
+        <table style="width:100%; margin-top:20px; border-collapse:collapse;">
+            <thead>
+                <tr style="background:#e9ecef;">
+                    <th style="padding:10px; border:1px solid #ddd;">Date</th>
+                    <th style="padding:10px; border:1px solid #ddd;">Programme</th>
+                    <th style="padding:10px; border:1px solid #ddd;">Exercise</th>
+                    <th style="padding:10px; border:1px solid #ddd;">Set</th>
+                    <th style="padding:10px; border:1px solid #ddd;">Reps</th>
+                    <th style="padding:10px; border:1px solid #ddd;">Rest Time</th>
+                    <th style="padding:10px; border:1px solid #ddd;">Set Duration</th>
+                </tr>
+            </thead>
+            <tbody id="historyTable"></tbody>
+        </table>
+    </div>
+
+    <script>
+        // Storage keys
+        const STORAGE_KEY = 'exerciseProgrammes';
+        const HISTORY_KEY = 'workoutHistory';
+
+        // Audio context for beeps
+        let audioContext = null;
+
+        // Workout state
+        let currentProgramme = null;
+        let currentExerciseIndex = 0;
+        let currentSet = 0;
+        let timerInterval = null;
+        let alarmInterval = null;
+        let setDurationInterval = null;
+        let timeRemaining = 0;
+        let setDuration = 0;
+        let isPaused = false;
+        let isResting = false;
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            loadProgrammes();
+            initAudio();
+        });
+
+        function initAudio() {
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        }
+
+        function playBeep(frequency = 440, duration = 0.5, type = 'sine') {
+            if (!audioContext) return;
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            oscillator.frequency.value = frequency;
+            oscillator.type = type;
+            gainNode.gain.setValueAtTime(0.5, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + duration);
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + duration);
+        }
+
+        function playWarningSound() {
+            // Two quick beeps for 10-second warning
+            playBeep(600, 0.2);
+            setTimeout(() => playBeep(600, 0.2), 300);
+        }
+
+        function playExpiredSound() {
+            // Repeating beeps for timer expiry
+            playBeep(800, 0.3);
+            setTimeout(() => playBeep(800, 0.3), 500);
+            setTimeout(() => playBeep(800, 0.3), 1000);
+        }
+
+        function saveProgramme() {
+            const name = document.getElementById('programmeName').value.trim();
+            const yamlStr = document.getElementById('yamlInput').value.trim();
+            const editId = document.getElementById('editProgrammeId').value;
+
+            if (!name) {
+                alert('Please enter a programme name');
+                return;
+            }
+
+            if (!yamlStr) {
+                alert('Please enter YAML snippet');
+                return;
+            }
+
+            let exercises;
+            try {
+                exercises = jsyaml.load(yamlStr);
+                if (!Array.isArray(exercises)) {
+                    throw new Error('YAML must be a list');
+                }
+                // Validate each exercise
+                for (const ex of exercises) {
+                    if (!ex.name || typeof ex.reps !== 'number' || 
+                        typeof ex.sets !== 'number' || typeof ex.restTime !== 'number') {
+                        throw new Error('Each exercise must have name, reps, sets, and restTime');
+                    }
+                }
+            } catch (e) {
+                alert('Invalid YAML: ' + e.message);
+                return;
+            }
+
+            const programmes = getStoredProgrammes();
+            
+            if (editId) {
+                // Update existing programme
+                const index = programmes.findIndex(p => p.id == editId);
+                if (index !== -1) {
+                    programmes[index] = { ...programmes[index], name, exercises };
+                }
+            } else {
+                // Create new programme
+                programmes.push({ name, exercises, id: Date.now() });
+            }
+            
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(programmes));
+            cancelEdit();
+            loadProgrammes();
+        }
+
+        function editProgramme(id) {
+            const programmes = getStoredProgrammes();
+            const prog = programmes.find(p => p.id === id);
+            if (!prog) return;
+
+            document.getElementById('programmeFormTitle').textContent = 'Edit Programme';
+            document.getElementById('editProgrammeId').value = prog.id;
+            document.getElementById('programmeName').value = prog.name;
+            document.getElementById('yamlInput').value = jsyaml.dump(prog.exercises, { indent: 2 });
+            document.getElementById('cancelEditBtn').style.display = 'inline-block';
+            validateYamlPreview();
+            
+            // Scroll to form
+            document.querySelector('.section').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function cancelEdit() {
+            document.getElementById('programmeFormTitle').textContent = 'Create New Programme';
+            document.getElementById('editProgrammeId').value = '';
+            document.getElementById('programmeName').value = '';
+            document.getElementById('yamlInput').value = '';
+            document.getElementById('cancelEditBtn').style.display = 'none';
+            document.getElementById('yamlValidation').style.display = 'none';
+        }
+
+        function validateYamlPreview() {
+            const yamlStr = document.getElementById('yamlInput').value.trim();
+            const validationDiv = document.getElementById('yamlValidation');
+            
+            if (!yamlStr) {
+                validationDiv.style.display = 'none';
+                return;
+            }
+
+            try {
+                const exercises = jsyaml.load(yamlStr);
+                if (!Array.isArray(exercises)) {
+                    throw new Error('YAML must be a list');
+                }
+                for (const ex of exercises) {
+                    if (!ex.name || typeof ex.reps !== 'number' || 
+                        typeof ex.sets !== 'number' || typeof ex.restTime !== 'number') {
+                        throw new Error('Each exercise must have name, reps, sets, and restTime');
+                    }
+                }
+                validationDiv.style.display = 'block';
+                validationDiv.style.background = '#d4edda';
+                validationDiv.style.color = '#155724';
+                validationDiv.textContent = `✓ Valid YAML (${exercises.length} exercise(s))`;
+            } catch (e) {
+                validationDiv.style.display = 'block';
+                validationDiv.style.background = '#f8d7da';
+                validationDiv.style.color = '#721c24';
+                validationDiv.textContent = '✗ ' + e.message;
+            }
+        }
+
+        function getStoredProgrammes() {
+            const stored = localStorage.getItem(STORAGE_KEY);
+            return stored ? JSON.parse(stored) : [];
+        }
+
+        function loadProgrammes() {
+            const programmes = getStoredProgrammes();
+            const list = document.getElementById('programmeList');
+            list.innerHTML = '';
+
+            if (programmes.length === 0) {
+                list.innerHTML = '<li style="color: #666; padding: 10px;">No programmes saved yet</li>';
+                return;
+            }
+
+            programmes.forEach(prog => {
+                const li = document.createElement('li');
+                li.className = 'programme-item';
+                li.innerHTML = `
+                    <span><strong>${prog.name}</strong> (${prog.exercises.length} exercises)</span>
+                    <div>
+                        <button onclick="selectProgramme(${prog.id})">Start Workout</button>
+                        <button onclick="editProgramme(${prog.id})">Edit</button>
+                        <button class="danger" onclick="deleteProgramme(${prog.id})">Delete</button>
+                    </div>
+                `;
+                list.appendChild(li);
+            });
+        }
+
+        function deleteProgramme(id) {
+            if (!confirm('Delete this programme?')) return;
+            let programmes = getStoredProgrammes();
+            programmes = programmes.filter(p => p.id !== id);
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(programmes));
+            loadProgrammes();
+        }
+
+        function selectProgramme(id) {
+            const programmes = getStoredProgrammes();
+            currentProgramme = programmes.find(p => p.id === id);
+            if (!currentProgramme) return;
+
+            document.getElementById('currentProgrammeName').textContent = currentProgramme.name;
+            document.getElementById('workoutSection').classList.remove('hidden');
+            
+            // Reset workout state
+            currentExerciseIndex = 0;
+            currentSet = 0;
+            isPaused = false;
+            isResting = false;
+            updateExerciseDisplay();
+        }
+
+        function updateExerciseDisplay() {
+            if (!currentProgramme || currentExerciseIndex >= currentProgramme.exercises.length) {
+                document.getElementById('currentExercise').textContent = 'Workout Complete!';
+                document.getElementById('setCounter').textContent = '';
+                document.getElementById('timerDisplay').textContent = '00:00';
+                return;
+            }
+
+            const exercise = currentProgramme.exercises[currentExerciseIndex];
+            document.getElementById('currentExercise').textContent = exercise.name;
+            document.getElementById('setCounter').textContent = 
+                `Set ${currentSet + 1} of ${exercise.sets} | ${exercise.reps} reps`;
+        }
+
+        function clearAllTimers() {
+            clearInterval(timerInterval);
+            clearInterval(alarmInterval);
+            clearInterval(setDurationInterval);
+        }
+
+        function startWorkout() {
+            clearAllTimers();
+            if (!currentProgramme) return;
+            
+            document.getElementById('startBtn').disabled = true;
+            document.getElementById('startSetBtn').disabled = false;
+            document.getElementById('historySection').classList.add('hidden');
+            document.getElementById('currentWorkoutBody').innerHTML = '';
+            
+            // Show first exercise, wait for user to start set
+            if (currentExerciseIndex >= currentProgramme.exercises.length) {
+                currentExerciseIndex = 0;
+                currentSet = 0;
+            }
+            updateExerciseDisplay();
+            updateTimerDisplay();
+        }
+
+        function startSet() {
+            clearAllTimers();
+            
+            if (currentExerciseIndex >= currentProgramme.exercises.length) {
+                stopWorkout();
+                document.getElementById('currentExercise').textContent = 'Workout Complete!';
+                return;
+            }
+            
+            // Hide rest timer and ready message
+            document.getElementById('restTimerSection').classList.add('hidden');
+            document.getElementById('readyMessage').classList.add('hidden');
+            
+            const exercise = currentProgramme.exercises[currentExerciseIndex];
+            timeRemaining = exercise.restTime;
+            setDuration = 0;
+            document.getElementById('startSetBtn').disabled = true;
+            document.getElementById('finishSetBtn').disabled = false;
+            document.getElementById('setDurationDisplay').textContent = '0s';
+            updateExerciseDisplay();
+            
+            // Start set duration timer
+            setDurationInterval = setInterval(() => {
+                setDuration++;
+                document.getElementById('setDurationDisplay').textContent = `${setDuration}s`;
+            }, 1000);
+        }
+
+        function finishSet() {
+            // Guard: don't process if already finished or button disabled
+            if (document.getElementById('finishSetBtn').disabled) return;
+            
+            clearAllTimers();
+            document.getElementById('finishSetBtn').disabled = true;
+            document.getElementById('setDurationDisplay').textContent = `${setDuration}s`;
+            
+            const exercise = currentProgramme.exercises[currentExerciseIndex];
+            
+            // Record history with set duration
+            recordHistory(currentProgramme.name, exercise.name, currentSet + 1, exercise.reps, exercise.restTime, setDuration);
+            
+            // Add to current workout table
+            addCurrentWorkoutRecord(exercise.name, currentSet + 1, exercise.reps, setDuration);
+            
+            // Move to next set or exercise
+            currentSet++;
+            if (currentSet >= exercise.sets) {
+                currentExerciseIndex++;
+                currentSet = 0;
+                if (currentExerciseIndex >= currentProgramme.exercises.length) {
+                    stopWorkout();
+                    document.getElementById('currentExercise').textContent = 'Workout Complete!';
+                    document.getElementById('startSetBtn').disabled = true;
+                    loadHistory();
+                    document.getElementById('historySection').classList.remove('hidden');
+                    return;
+                }
+            }
+            
+            // Show rest timer
+            const nextExercise = currentProgramme.exercises[currentExerciseIndex];
+            document.getElementById('restTimerSection').classList.remove('hidden');
+            document.getElementById('readyMessage').classList.add('hidden');
+            timeRemaining = exercise.restTime;
+            updateExerciseDisplay();
+            document.getElementById('startSetBtn').disabled = false;
+            startTimer();
+        }
+
+        function startTimer() {
+            updateTimerDisplay();
+            
+            timerInterval = setInterval(() => {
+                timeRemaining--;
+                updateTimerDisplay();
+
+                // Warning at 10 seconds
+                if (timeRemaining === 10) {
+                    playWarningSound();
+                }
+
+                // Timer expired
+                if (timeRemaining < 0) {
+                    clearInterval(timerInterval);
+                    playExpiredSound();
+                    // Stop repeating alarm, show ready message
+                    clearInterval(alarmInterval);
+                    document.getElementById('restTimerSection').classList.add('hidden');
+                    const nextExercise = currentProgramme.exercises[currentExerciseIndex];
+                    document.getElementById('readyMessage').textContent = `Press Start Set to start ${nextExercise.name}`;
+                    document.getElementById('readyMessage').classList.remove('hidden');
+                }
+            }, 1000);
+        }
+
+        function updateTimerDisplay() {
+            const display = document.getElementById('timerDisplay');
+            // Clamp to 0 minimum for display
+            const displayTime = Math.max(0, timeRemaining);
+            const minutes = Math.floor(displayTime / 60);
+            const seconds = displayTime % 60;
+            display.textContent = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+
+            display.classList.remove('warning', 'expired');
+            if (timeRemaining <= 10 && timeRemaining > 0) {
+                display.classList.add('warning');
+            } else if (timeRemaining < 0) {
+                display.classList.add('expired');
+            }
+        }
+
+        function stopWorkout() {
+            clearAllTimers();
+            document.getElementById('startBtn').disabled = false;
+            document.getElementById('startSetBtn').disabled = true;
+            document.getElementById('finishSetBtn').disabled = true;
+            currentExerciseIndex = 0;
+            currentSet = 0;
+            timeRemaining = 0;
+            setDuration = 0;
+            document.getElementById('restTimerSection').classList.add('hidden');
+            document.getElementById('readyMessage').classList.add('hidden');
+            document.getElementById('setDurationDisplay').textContent = '0s';
+            document.getElementById('currentExercise').textContent = '';
+            document.getElementById('setCounter').textContent = '';
+        }
+
+        function recordHistory(programmeName, exerciseName, setNum, reps, restTime, setDuration) {
+            const history = getStoredHistory();
+            history.push({
+                date: new Date().toISOString(),
+                programme: programmeName,
+                exercise: exerciseName,
+                set: setNum,
+                reps: reps,
+                restTime: restTime,
+                setDuration: setDuration
+            });
+            localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+        }
+
+        function addCurrentWorkoutRecord(exerciseName, setNum, reps, duration) {
+            const tbody = document.getElementById('currentWorkoutBody');
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td style="padding:8px; border:1px solid #ddd;">${exerciseName}</td>
+                <td style="padding:8px; border:1px solid #ddd;">${setNum}</td>
+                <td style="padding:8px; border:1px solid #ddd;">${reps}</td>
+                <td style="padding:8px; border:1px solid #ddd;">${duration}s</td>
+            `;
+            tbody.appendChild(tr);
+        }
+
+        function getStoredHistory() {
+            const stored = localStorage.getItem(HISTORY_KEY);
+            return stored ? JSON.parse(stored) : [];
+        }
+
+        function loadHistory() {
+            const history = getStoredHistory();
+            const tbody = document.getElementById('historyTable');
+            tbody.innerHTML = '';
+
+            // Sort by date descending
+            history.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+            history.slice(0, 100).forEach(entry => {
+                const tr = document.createElement('tr');
+                const date = new Date(entry.date);
+                tr.innerHTML = `
+                    <td style="padding:8px; border:1px solid #ddd;">${date.toLocaleString()}</td>
+                    <td style="padding:8px; border:1px solid #ddd;">${entry.programme}</td>
+                    <td style="padding:8px; border:1px solid #ddd;">${entry.exercise}</td>
+                    <td style="padding:8px; border:1px solid #ddd;">${entry.set}</td>
+                    <td style="padding:8px; border:1px solid #ddd;">${entry.reps}</td>
+                    <td style="padding:8px; border:1px solid #ddd;">${entry.restTime}s</td>
+                    <td style="padding:8px; border:1px solid #ddd;">${entry.setDuration}s</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function downloadBackup() {
+            const data = {
+                programmes: getStoredProgrammes(),
+                history: getStoredHistory()
+            };
+            const yamlStr = jsyaml.dump(data, { indent: 2 });
+            const blob = new Blob([yamlStr], { type: 'application/x-yaml' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `exercise-backup-${new Date().toISOString().split('T')[0]}.yaml`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function importBackup(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const data = jsyaml.load(e.target.result);
+                    if (data.programmes) {
+                        localStorage.setItem(STORAGE_KEY, JSON.stringify(data.programmes));
+                    }
+                    if (data.history) {
+                        localStorage.setItem(HISTORY_KEY, JSON.stringify(data.history));
+                    }
+                    loadProgrammes();
+                    loadHistory();
+                    alert('Backup imported successfully!');
+                } catch (err) {
+                    alert('Invalid backup file: ' + err.message);
+                }
+            };
+            reader.readAsText(file);
+            event.target.value = '';
+        }
+
+        function clearHistory() {
+            if (!confirm('Clear all workout history?')) return;
+            localStorage.removeItem(HISTORY_KEY);
+            loadHistory();
+        }
+
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js')
+                    .then(registration => {
+                        console.log('ServiceWorker registration successful with scope: ', registration.scope);
+                    })
+                    .catch(error => {
+                        console.log('ServiceWorker registration failed: ', error);
+                    });
+            });
+        }
+    </script>
+</body>
+</html>
