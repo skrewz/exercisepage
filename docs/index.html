@@ -27,6 +27,47 @@
             color: #333;
             margin-bottom: 20px;
         }
+        .backup-warning {
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            color: #856404;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .backup-warning.hidden {
+            display: none;
+        }
+        .backup-warning-content {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .backup-warning-icon {
+            font-size: 24px;
+        }
+        .backup-warning-text {
+            font-size: 15px;
+            line-height: 1.4;
+        }
+        .backup-warning-text strong {
+            font-weight: 600;
+        }
+        .backup-warning-close {
+            background: transparent;
+            border: none;
+            font-size: 20px;
+            cursor: pointer;
+            color: #856404;
+            padding: 5px;
+            line-height: 1;
+        }
+        .backup-warning-close:hover {
+            color: #664d03;
+        }
         .section {
             background: white;
             padding: 20px;
@@ -156,9 +197,15 @@
             margin-bottom: 10px;
         }
     </style>
-</head>
+ </head>
 <body>
-    <h1>Exercise app</h1>
+    <div id="backupWarning" class="backup-warning hidden">
+        <div class="backup-warning-content">
+            <span class="backup-warning-icon">⚠️</span>
+            <span class="backup-warning-text" id="backupWarningText"></span>
+        </div>
+        <button class="backup-warning-close" onclick="dismissBackupWarning()">&times;</button>
+    </div>
 
     <div class="section">
         <h2 id="programmeFormTitle">Create New Programme</h2>
@@ -245,6 +292,7 @@
         // Storage keys
         const STORAGE_KEY = 'exerciseProgrammes';
         const HISTORY_KEY = 'workoutHistory';
+        const LAST_BACKUP_KEY = 'lastBackupTime';
 
         // Audio context for beeps
         let audioContext = null;
@@ -265,6 +313,7 @@
         document.addEventListener('DOMContentLoaded', () => {
             loadProgrammes();
             initAudio();
+            checkBackupWarning();
         });
 
         function initAudio() {
@@ -332,7 +381,7 @@
             }
 
             const programmes = getStoredProgrammes();
-            
+
             if (editId) {
                 // Update existing programme
                 const index = programmes.findIndex(p => p.id == editId);
@@ -343,7 +392,7 @@
                 // Create new programme
                 programmes.push({ name, exercises, id: Date.now() });
             }
-            
+
             localStorage.setItem(STORAGE_KEY, JSON.stringify(programmes));
             cancelEdit();
             loadProgrammes();
@@ -360,7 +409,7 @@
             document.getElementById('yamlInput').value = jsyaml.dump(prog.exercises, { indent: 2 });
             document.getElementById('cancelEditBtn').style.display = 'inline-block';
             validateYamlPreview();
-            
+
             // Scroll to form
             document.querySelector('.section').scrollIntoView({ behavior: 'smooth' });
         }
@@ -377,7 +426,7 @@
         function validateYamlPreview() {
             const yamlStr = document.getElementById('yamlInput').value.trim();
             const validationDiv = document.getElementById('yamlValidation');
-            
+
             if (!yamlStr) {
                 validationDiv.style.display = 'none';
                 return;
@@ -451,7 +500,7 @@
 
             document.getElementById('currentProgrammeName').textContent = currentProgramme.name;
             document.getElementById('workoutSection').classList.remove('hidden');
-            
+
             // Reset workout state
             currentExerciseIndex = 0;
             currentSet = 0;
@@ -483,12 +532,12 @@
         function startWorkout() {
             clearAllTimers();
             if (!currentProgramme) return;
-            
+
             document.getElementById('startBtn').disabled = true;
             document.getElementById('startSetBtn').disabled = false;
             document.getElementById('historySection').classList.add('hidden');
             document.getElementById('currentWorkoutBody').innerHTML = '';
-            
+
             // Show first exercise, wait for user to start set
             if (currentExerciseIndex >= currentProgramme.exercises.length) {
                 currentExerciseIndex = 0;
@@ -500,17 +549,17 @@
 
         function startSet() {
             clearAllTimers();
-            
+
             if (currentExerciseIndex >= currentProgramme.exercises.length) {
                 stopWorkout();
                 document.getElementById('currentExercise').textContent = 'Workout Complete!';
                 return;
             }
-            
+
             // Hide rest timer and ready message
             document.getElementById('restTimerSection').classList.add('hidden');
             document.getElementById('readyMessage').classList.add('hidden');
-            
+
             const exercise = currentProgramme.exercises[currentExerciseIndex];
             timeRemaining = exercise.restTime;
             setDuration = 0;
@@ -518,7 +567,7 @@
             document.getElementById('finishSetBtn').disabled = false;
             document.getElementById('setDurationDisplay').textContent = '0s';
             updateExerciseDisplay();
-            
+
             // Start set duration timer
             setDurationInterval = setInterval(() => {
                 setDuration++;
@@ -529,19 +578,19 @@
         function finishSet() {
             // Guard: don't process if already finished or button disabled
             if (document.getElementById('finishSetBtn').disabled) return;
-            
+
             clearAllTimers();
             document.getElementById('finishSetBtn').disabled = true;
             document.getElementById('setDurationDisplay').textContent = `${setDuration}s`;
-            
+
             const exercise = currentProgramme.exercises[currentExerciseIndex];
-            
+
             // Record history with set duration
             recordHistory(currentProgramme.name, exercise.name, currentSet + 1, exercise.reps, exercise.restTime, setDuration);
-            
+
             // Add to current workout table
             addCurrentWorkoutRecord(exercise.name, currentSet + 1, exercise.reps, setDuration);
-            
+
             // Move to next set or exercise
             currentSet++;
             if (currentSet >= exercise.sets) {
@@ -556,7 +605,7 @@
                     return;
                 }
             }
-            
+
             // Show rest timer
             const nextExercise = currentProgramme.exercises[currentExerciseIndex];
             document.getElementById('restTimerSection').classList.remove('hidden');
@@ -569,7 +618,7 @@
 
         function startTimer() {
             updateTimerDisplay();
-            
+
             timerInterval = setInterval(() => {
                 timeRemaining--;
                 updateTimerDisplay();
@@ -693,6 +742,8 @@
             a.download = `exercise-backup-${new Date().toISOString().split('T')[0]}.yaml`;
             a.click();
             URL.revokeObjectURL(url);
+            localStorage.setItem(LAST_BACKUP_KEY, new Date().toISOString());
+            checkBackupWarning();
         }
 
         function importBackup(event) {
@@ -709,6 +760,9 @@
                     if (data.history) {
                         localStorage.setItem(HISTORY_KEY, JSON.stringify(data.history));
                     }
+                    if (data.lastBackupTime) {
+                        localStorage.setItem(LAST_BACKUP_KEY, data.lastBackupTime);
+                    }
                     loadProgrammes();
                     loadHistory();
                     alert('Backup imported successfully!');
@@ -718,6 +772,39 @@
             };
             reader.readAsText(file);
             event.target.value = '';
+        }
+
+        function checkBackupWarning() {
+            const lastBackupTime = localStorage.getItem(LAST_BACKUP_KEY);
+            const warningDiv = document.getElementById('backupWarning');
+            const warningText = document.getElementById('backupWarningText');
+            const programmes = getStoredProgrammes();
+
+            if (programmes.length === 0) {
+                warningDiv.classList.add('hidden');
+                return;
+            }
+
+            if (!lastBackupTime) {
+                warningText.textContent = 'You have never backed up your data. Please take a backup now.';
+                warningDiv.classList.remove('hidden');
+                return;
+            }
+
+            const lastBackup = new Date(lastBackupTime);
+            const now = new Date();
+            const daysSinceBackup = Math.floor((now - lastBackup) / (1000 * 60 * 60 * 24));
+
+            if (daysSinceBackup >= 7) {
+                warningText.textContent = `Your last backup was ${daysSinceBackup} days ago (${lastBackup.toLocaleString()}). Please take a backup now.`;
+                warningDiv.classList.remove('hidden');
+            } else {
+                warningDiv.classList.add('hidden');
+            }
+        }
+
+        function dismissBackupWarning() {
+            document.getElementById('backupWarning').classList.add('hidden');
         }
 
         function clearHistory() {
