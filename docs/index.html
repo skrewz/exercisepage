@@ -549,6 +549,7 @@
 
         function startSet() {
             clearAllTimers();
+            clearInterval(alarmInterval);
 
             if (currentExerciseIndex >= currentProgramme.exercises.length) {
                 stopWorkout();
@@ -632,8 +633,8 @@
                 if (timeRemaining < 0) {
                     clearInterval(timerInterval);
                     playExpiredSound();
-                    // Stop repeating alarm, show ready message
-                    clearInterval(alarmInterval);
+                    // Start repeating alarm every 10 seconds
+                    alarmInterval = setInterval(playExpiredSound, 10000);
                     document.getElementById('restTimerSection').classList.add('hidden');
                     const nextExercise = currentProgramme.exercises[currentExerciseIndex];
                     document.getElementById('readyMessage').textContent = `Press Start Set to start ${nextExercise.name}`;
