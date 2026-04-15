@@ -230,14 +230,6 @@
         <ul class="programme-list" id="programmeList"></ul>
     </div>
 
-    <div class="section" id="dataSection">
-        <h2>Data management</h2>
-        <button onclick="downloadBackup()">Download backup</button>
-        <button onclick="document.getElementById('importFile').click()">Import backup</button>
-        <input type="file" id="importFile" accept=".yaml,.yml" style="display:none" onchange="importBackup(event)">
-        <button class="danger" onclick="clearHistory()">Clear history</button>
-    </div>
-
     <div class="section hidden" id="workoutSection">
         <h2 id="currentProgrammeName"></h2>
         <div class="current-exercise" id="currentExercise"></div>
@@ -268,6 +260,14 @@
                 <tbody id="currentWorkoutBody"></tbody>
             </table>
         </div>
+    </div>
+
+    <div class="section" id="dataSection">
+        <h2>Data management</h2>
+        <button onclick="downloadBackup()">Download backup</button>
+        <button onclick="document.getElementById('importFile').click()">Import backup</button>
+        <input type="file" id="importFile" accept=".yaml,.yml" style="display:none" onchange="importBackup(event)">
+        <button class="danger" onclick="clearHistory()">Clear history</button>
     </div>
 
     <div class="section hidden" id="historySection">
