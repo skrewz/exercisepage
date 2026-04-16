@@ -195,7 +195,7 @@
             border: 1px solid #ddd;
             border-radius: 4px;
             margin-bottom: 10px;
-        }
+       }
         .install-banner {
           background: #d4edda;
           color: #155724;
@@ -205,6 +205,67 @@
           font-size: 14px;
           margin-bottom: 20px;
           border-radius: 8px;
+        }
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        .modal-overlay.hidden {
+            display: none;
+        }
+        .modal-content {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            max-width: 600px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        .modal-title {
+            font-size: 20px;
+            font-weight: bold;
+            margin-bottom: 15px;
+        }
+        .modal-base64-input {
+            width: 100%;
+            min-height: 150px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+            resize: vertical;
+            margin-bottom: 15px;
+        }
+        .modal-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+        }
+        .copy-feedback {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #28a745;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 4px;
+            z-index: 1001;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .copy-feedback.visible {
+            opacity: 1;
         }
     </style>
  </head>
@@ -302,6 +363,19 @@
         </table>
     </div>
 
+    <div id="shareModal" class="modal-overlay hidden">
+        <div class="modal-content">
+            <div class="modal-title">Share Programme</div>
+            <textarea id="shareBase64" class="modal-base64-input" readonly></textarea>
+            <div class="modal-actions">
+                <button onclick="closeShareModal()">Close</button>
+                <button onclick="copyBase64()">Copy to clipboard</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="copyFeedback" class="copy-feedback">✓ Copied to clipboard!</div>
+
     <script>
         // Storage keys
         const STORAGE_KEY = 'exerciseProgrammes';
@@ -363,7 +437,7 @@
 
         function saveProgramme() {
             const name = document.getElementById('programmeName').value.trim();
-            const yamlStr = document.getElementById('yamlInput').value.trim();
+            let yamlStr = document.getElementById('yamlInput').value.trim();
             const editId = document.getElementById('editProgrammeId').value;
 
             if (!name) {
@@ -374,6 +448,15 @@
             if (!yamlStr) {
                 alert('Please enter YAML snippet');
                 return;
+            }
+
+            if (isBase64(yamlStr)) {
+                try {
+                    yamlStr = decodeURIComponent(escape(atob(yamlStr)));
+                } catch (e) {
+                    alert('Invalid base64 encoding');
+                    return;
+                }
             }
 
             let exercises;
@@ -438,12 +521,29 @@
         }
 
         function validateYamlPreview() {
-            const yamlStr = document.getElementById('yamlInput').value.trim();
+            let yamlStr = document.getElementById('yamlInput').value.trim();
             const validationDiv = document.getElementById('yamlValidation');
 
             if (!yamlStr) {
                 validationDiv.style.display = 'none';
                 return;
+            }
+
+            if (isBase64(yamlStr)) {
+                try {
+                    yamlStr = decodeURIComponent(escape(atob(yamlStr)));
+                    validationDiv.style.display = 'block';
+                    validationDiv.style.background = '#fff3cd';
+                    validationDiv.style.color = '#856404';
+                    validationDiv.textContent = '✓ Base64 detected - will decode on save';
+                    return;
+                } catch (e) {
+                    validationDiv.style.display = 'block';
+                    validationDiv.style.background = '#f8d7da';
+                    validationDiv.style.color = '#721c24';
+                    validationDiv.textContent = '✗ Invalid base64: ' + e.message;
+                    return;
+                }
             }
 
             try {
@@ -492,6 +592,7 @@
                     <div>
                         <button onclick="selectProgramme(${prog.id})">Start Workout</button>
                         <button onclick="editProgramme(${prog.id})">Edit</button>
+                        <button onclick="shareProgramme(${prog.id})">Share program</button>
                         <button class="danger" onclick="deleteProgramme(${prog.id})">Delete</button>
                     </div>
                 `;
@@ -826,6 +927,62 @@
             if (!confirm('Clear all workout history?')) return;
             localStorage.removeItem(HISTORY_KEY);
             loadHistory();
+        }
+
+        function closeShareModal() {
+            document.getElementById('shareModal').classList.add('hidden');
+        }
+
+        function shareProgramme(id) {
+            const programmes = getStoredProgrammes();
+            const prog = programmes.find(p => p.id === id);
+            if (!prog) return;
+
+            const yamlStr = jsyaml.dump(prog.exercises, { indent: 2 });
+            const base64Str = btoa(unescape(encodeURIComponent(yamlStr)));
+            document.getElementById('shareBase64').value = base64Str;
+            document.getElementById('shareModal').classList.remove('hidden');
+        }
+
+        function copyBase64() {
+            const textarea = document.getElementById('shareBase64');
+            textarea.select();
+            textarea.setSelectionRange(0, 99999);
+            try {
+                document.execCommand('copy');
+                showCopyFeedback();
+            } catch (err) {
+                console.error('Failed to copy:', err);
+                alert('Failed to copy to clipboard. Please select and copy manually.');
+            }
+        }
+
+        function showCopyFeedback() {
+            const feedback = document.getElementById('copyFeedback');
+            feedback.classList.add('visible');
+            setTimeout(() => {
+                feedback.classList.remove('visible');
+            }, 2000);
+        }
+
+        document.addEventListener('click', (e) => {
+            const modal = document.getElementById('shareModal');
+            if (e.target === modal) {
+                closeShareModal();
+            }
+        });
+
+        function isBase64(str) {
+            const base64Pattern = /^[A-Za-z0-9+/]*={0,2}$/;
+            if (!base64Pattern.test(str) || str.length % 4 !== 0) {
+                return false;
+            }
+            try {
+                atob(str);
+                return true;
+            } catch (e) {
+                return false;
+            }
         }
 
         if ('serviceWorker' in navigator) {
